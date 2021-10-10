@@ -11,8 +11,9 @@ typedef struct tablapag
 typedef struct subentrada
 {
   char validez;
-  char* nombre;
-  int tamaño;
+  char* nombre ;
+  unsigned int tamano;
+  char* vpn_offset;
   char vpn;
   int offset;
 
@@ -25,7 +26,7 @@ typedef struct pcb
   int id;
   char* nombre;
   Subentrada* subentradas;
-  Tablapag* tablapag;  
+  char* tablapag;  
 } Pcb ;
 
 typedef struct bitmap
@@ -44,4 +45,5 @@ typedef struct crms
   Pcb** tabla_pcb;
   Bitmap* bitmap;
   Frame*  frame;
-} CrmsFile ;
+} Crms ;
+void cr_mount (char* filename);

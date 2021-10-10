@@ -4,6 +4,9 @@
 #include "crms_API.h"
 int main(int argc, char **argv)
 {
+    char* filename = argv[1];
+    printf("%s",filename);
     printf("FUNCIONA! \n");
+    cr_mount(filename);
     return 0;
 }
