@@ -2,22 +2,27 @@
 #define BUFFER_TABLA 4096
 #define BUFFER_BITMAP 16
 #define BUFFER_FRAME 1073741824
-
+typedef struct pagina
+{
+  unsigned int pfn; //contiene PFN y validez ojo a futuro
+  unsigned int validez;
+} Pagina ;
 typedef struct tablapag
 {
-  char* entradas; //contiene PFN y validez ojo a futuro
+  Pagina** paginas; //contiene PFN y validez ojo a futuro
+
 } Tablapag ;
 
-typedef struct subentrada
+typedef struct crms_file
 {
   char validez;
   char* nombre ;
   unsigned int tamano;
   char* vpn_offset;
-  char vpn;
-  int offset;
+  unsigned int vpn;
+  unsigned int offset;
 
-} Subentrada ;
+} CrmsFile ;
 
 //entrada!
 typedef struct pcb
@@ -25,25 +30,20 @@ typedef struct pcb
   char estado;
   int id;
   char* nombre;
-  Subentrada* subentradas;
-  char* tablapag;  
+  CrmsFile** subentradas;
+  Tablapag tablapag;  
 } Pcb ;
 
 typedef struct bitmap
 {
- double mitad1; // mitad de bits de los 128 totales 
- double mitad2; 
+ int* arreglo; 
 } Bitmap ;
 
-typedef struct frame
-{
-  char contenido; 
-} Frame ;
+
 
 typedef struct crms
 {
   Pcb** tabla_pcb;
   Bitmap* bitmap;
-  Frame*  frame;
 } Crms ;
 void cr_mount (char* filename);
