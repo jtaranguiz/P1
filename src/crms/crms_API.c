@@ -160,3 +160,37 @@ void cr_mount (char* filename)
     crms->tabla_pcb = tabla_pcb;
 
 }
+
+CrmsFile* cr_open(int process_id, char* file_name, char mode){
+    CrmsFile* crmsfile;
+    if (mode == 'r'){
+        //do stuff
+        //crmsfile.process_id = process_id;
+        for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
+            if (crms->tabla_pcb[i]->id == process_id){
+                for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
+                    if (crms->tabla_pcb[i]->subentradas[j]->name == file_name){
+                        crmsfile = crms->tabla_pcb[i]->subentradas[j];
+                    }
+                }
+            }
+        }
+    }
+    if (mode == 'w'){
+        //do other stuff
+        if(cr_exists(process_id, file_name)) 
+        {
+            crmsfile = NULL;
+        }
+        else{
+            crmsfile = calloc(1, sizeof(CrmsFile));
+            crmsfile->nombre = calloc(12,sizeof(char));
+            crmsfile->nombre = file_name;
+            //crmsfile->process_id = process_id;
+            crmsfile->tamano = 0;
+            //to do: poner en una subentrada
+        }
+    }
+    return crmsfile;
+}
+

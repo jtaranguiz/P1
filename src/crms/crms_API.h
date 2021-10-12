@@ -22,7 +22,7 @@ typedef struct crms_file
   unsigned int vpn;
   unsigned int offset;
 
-} CrmsFile ;
+} CrmsFile ; //process_id.
 
 //entrada!
 typedef struct pcb
@@ -47,3 +47,4 @@ typedef struct crms
   Bitmap* bitmap;
 } Crms ;
 void cr_mount (char* filename);
+CrmsFile* cr_open(int process_id, char* file_name, char mode);
