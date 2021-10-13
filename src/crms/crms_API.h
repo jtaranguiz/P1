@@ -2,6 +2,8 @@
 #define BUFFER_TABLA 4096
 #define BUFFER_BITMAP 16
 #define BUFFER_FRAME 1073741824
+#define BUFFER_PAGINA = 8388608
+
 typedef struct pagina
 {
   unsigned int pfn; //contiene PFN y validez ojo a futuro
@@ -16,13 +18,13 @@ typedef struct tablapag
 typedef struct crms_file
 {
   char validez;
-  char* nombre ;
+  char* nombre;
   unsigned int tamano;
-  char* vpn_offset;
+  char* vpn_offset; //ya no se usa
   unsigned int vpn;
   unsigned int offset;
 
-} CrmsFile ; //process_id.
+} CrmsFile ; //process_id o puntero al proceso.
 
 //entrada!
 typedef struct pcb
@@ -45,6 +47,6 @@ typedef struct crms
 {
   Pcb** tabla_pcb;
   Bitmap* bitmap;
-} Crms ;
+} Crms ; //guardar direccion del .bin para no pasarla como argumento a las funciones
 void cr_mount (char* filename);
 CrmsFile* cr_open(int process_id, char* file_name, char mode);

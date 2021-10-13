@@ -8,7 +8,7 @@ void cr_mount (char* filename)
     FILE* file_pointer = fopen(filename, "rb");
     char* buffer_tabla = calloc(BUFFER_TABLA, sizeof(char));
     char* buffer_bitmap = calloc(BUFFER_BITMAP,sizeof(char));
-    char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char));
+    char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char)); //NO SE USA
     //liberar memoria
     int contador_pcbs = 0;
     Crms* crms = malloc(sizeof(Crms));
@@ -153,11 +153,12 @@ void cr_mount (char* filename)
         contador_bitmap += 1;
         printf("Bin: %i %i %i %i     %i %i %i %i \n", primero, segundo, tercero , cuarto, quinto, sexto, septimo, octavo);
 
-        
+
     }
     
     crms->bitmap = bitmap;
-    crms->tabla_pcb = tabla_pcb;
+    crms->tabla_pcb = tabla_pcb; 
+    //TO DO: crear variable global
 
 }
 
@@ -169,9 +170,11 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
         for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
             if (crms->tabla_pcb[i]->id == process_id){
                 for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
-                    if (crms->tabla_pcb[i]->subentradas[j]->name == file_name){
-                        crmsfile = crms->tabla_pcb[i]->subentradas[j];
-                        break;
+                    if (crms->tabla_pcb[i]->subentradas[j]->validez){
+                        if (crms->tabla_pcb[i]->subentradas[j]->name == file_name){ //agregar validez de subentrada.
+                            crmsfile = crms->tabla_pcb[i]->subentradas[j];
+                            break;
+                        }
                     }
                 }
                 break;
@@ -190,32 +193,34 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
             crmsfile->nombre = file_name;
             //crmsfile->process_id = process_id;
             crmsfile->tamano = 0;
-            //to do: poner en una subentrada
+            //to do: poner en una subentrada o ponerlo al escribir
         }
     }
     return crmsfile;
 }
 
-int cr_write_file(CrmsFile* file_desc, void* buffer, int n_bytes){
+int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     //encontrar el primer lugar vacio.
-    for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
+    int first_vpn = 0;
+    int first_offset = 0;
+    int second_vpn = 32;//para ver hasta donde puedo escribir.
+    int second_offset = BUFFER_PAGINA-1; //8MB
+    for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos |    |
         if (crms->tabla_pcb[i]->id == file_desc->process_id){
-            int first_vpn = 0;
-            int first_offset = 0;
             int estado = 1;
             while (estado){
                 estado = 0;
                 for (int j = 0; j < 10; j++){
                     if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]-vpn){
+                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn){
                             if (first_offset == crms->tabla_pcb[i]->subentradas[j]->offset){
                                 //sumar tamaño y cambiar first_vpn y first offset
                                 first_vpn = crms->tabla_pcb[i]->subentradas[j]->vpn;
                                 first_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
                                 first_offset += crms->tabla_pcb[i]->subentradas[j]->tamaño;
-                                while (first_offset> 2^20*2^3-1){ //REVISAR CASOS BORDE
+                                while (first_offset > (BUFFER_PAGINA-1)){ //REVISAR CASOS BORDE 
                                     first_vpn += 1;
-                                    first_offset -= 2^20*2^3-1; //REVISAR CASOS BORDE
+                                    first_offset -= BUFFER_PAGINA; //REVISAR CASOS BORDE le resto el tamaño de la pagina para dezplazar el offset
                                 }
                                 estado = 1;
                             }
@@ -223,13 +228,13 @@ int cr_write_file(CrmsFile* file_desc, void* buffer, int n_bytes){
                     }
                 }
             }
-            int second_vpn = 16;//para ver hasta donde puedo escribir.
-            int second_offset = 2^20*2^3-1; //8MB
+            int second_vpn = 32;//para ver hasta donde puedo escribir.
+            int second_offset = BUFFER_PAGINA-1; //8MB
             for (int j = 0; j < 10; j++){
                 if (crms->tabla_pcb[i]->subentradas[j]->validez){
                     if (first_vpn == second_vpn){
                         if (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn){
-                            if ((first_offset <= crms->tabla_pcb[i]->subentradas[j]->offset) && (crms->tabla_pcb[i]->subentradas[j]->offset <= second_offset)){
+                            if ((first_offset < crms->tabla_pcb[i]->subentradas[j]->offset) && (crms->tabla_pcb[i]->subentradas[j]->offset <= second_offset)){
                                 second_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
                             }
                         }
@@ -255,5 +260,31 @@ int cr_write_file(CrmsFile* file_desc, void* buffer, int n_bytes){
             break;
         }
     }
-    //Por hacer: Escritura.
+    //Por hacer: Escritura. Y poner en la tabla de archivos PD: NUNCA SE ESCRIBE EN second.
+    
+    int espacio_libre = 0; //calcular tamaño del espacio libre.
+    if (first_vpn == second_vpn){
+        espacio_libre = second_offset - first_offset;
+    }
+    else{
+        espacio_libre += BUFFER_PAGINA - first_offset; //tamaño pagina - first offset
+        espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamaño de paginas entre incio y fin
+        espacio_libre += second_offset; //second_offset
+    }
+    //Por hacer: buscar espacio de memoria fisica.
+    int espacio_libre;
+    char* file_name = crms->mem_file;
+    FILE* file_pointer = fopen(filename, "rb+");
+    
+    int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA; //sumar direccion de memoria fisica
+    fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
+    int counter = 0;
+    while (n_bytes && espacio_libre){
+        //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamaño de bytes a escribir, nmemb numero de elementos, stream es el file
+        fwrite(buffer, 1, 1, file_pointer);
+        fseek(file_pointer, 1, SEEK_SET); 
+        //REVISAR CAMBIO DE FRAME
+        n_bytes --;
+        espacio_libre --;
+    }
 }
