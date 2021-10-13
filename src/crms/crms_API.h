@@ -2,7 +2,7 @@
 #define BUFFER_TABLA 4096
 #define BUFFER_BITMAP 16
 #define BUFFER_FRAME 1073741824
-#define BUFFER_PAGINA = 8388608
+#define BUFFER_PAGINA 8388608
 
 typedef struct pagina
 {
@@ -23,6 +23,7 @@ typedef struct crms_file
   char* vpn_offset; //ya no se usa
   unsigned int vpn;
   unsigned int offset;
+  struct pcb* process;
 
 } CrmsFile ; //process_id o puntero al proceso.
 

@@ -3,12 +3,21 @@
 #include <stdlib.h>
 #include <byteswap.h>
 #include "crms_API.h"
-void cr_mount (char* filename)
+#include <ctype.h>
+extern char* ruta;
+extern Crms* crms;
+void cr_mount(char* filename)
+{
+    ruta = filename;
+    printf("%s\n",ruta);
+}
+Crms* asignar (char* filename)
 {
     FILE* file_pointer = fopen(filename, "rb");
     char* buffer_tabla = calloc(BUFFER_TABLA, sizeof(char));
     char* buffer_bitmap = calloc(BUFFER_BITMAP,sizeof(char));
-    char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char)); //NO SE USA
+    char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char));
+    printf("en asignar: %s", filename);
     //liberar memoria
     int contador_pcbs = 0;
     Crms* crms = malloc(sizeof(Crms));
@@ -21,21 +30,22 @@ void cr_mount (char* filename)
         int contador_nombre = 0;
         Pcb* pecebe = malloc(sizeof(Pcb));
         pecebe->estado = buffer_tabla[i];
-        pecebe->id = buffer_tabla[i+1];
+        pecebe->id = (unsigned int)((unsigned char)buffer_tabla[i+1]);
         pecebe->nombre = calloc(12,sizeof(char));
         for (int j = i+2; j < i+14; j++)
         {
             pecebe->nombre[contador_nombre] = buffer_tabla[j];
             contador_nombre += 1;
         }
-        printf("%s \n",pecebe->nombre);        
-        CrmsFile** subentradas = calloc(10,sizeof(CrmsFile*));
+        printf("%s \n",pecebe->nombre); 
+        pecebe->subentradas = calloc(10,sizeof(CrmsFile*));    
+        //CrmsFile** subentradas = calloc(10,sizeof(CrmsFile*));
         
         for (int j = 0; j < 10; j++)
         {
             int contador_nombre_subentrada = 0;
             CrmsFile* subentrada = malloc(sizeof(CrmsFile));
-            subentrada->validez = buffer_tabla[i+14];
+            subentrada->validez = buffer_tabla[i+14 + (21*j)];
             //printf("validez %i\n", subentrada->validez);
             subentrada->nombre = calloc(12,sizeof(char));
             for (int k = (i+15) + (21*j); k < i+27 + (21*j); k++)
@@ -88,15 +98,15 @@ void cr_mount (char* filename)
             unsigned int numero = 496; 
             unsigned int numero_offset = 4294966784;
 
-            unsigned int vpn = (direccion & numero) >> 4;   //vpn  offset-> vpn 000000
+            unsigned int vpn = (direccion & numero) >> 4;
             unsigned int offset = (direccion & numero_offset) >> 9;
             
             subentrada->offset = offset;
             subentrada->vpn = vpn;
-
-            subentradas[j] = subentrada;
+            subentrada ->process = pecebe;
+            pecebe->subentradas[j] = subentrada;
         }
-        pecebe->subentradas = subentradas;
+        //pecebe->subentradas = subentradas;
         int contador_pag = 0;
         unsigned int info;
         pecebe->tablapag.paginas = calloc(32, sizeof(Pagina*));
@@ -153,14 +163,78 @@ void cr_mount (char* filename)
         contador_bitmap += 1;
         printf("Bin: %i %i %i %i     %i %i %i %i \n", primero, segundo, tercero , cuarto, quinto, sexto, septimo, octavo);
 
-
+        
     }
     
     crms->bitmap = bitmap;
-    crms->tabla_pcb = tabla_pcb; 
-    //TO DO: crear variable global
+    crms->tabla_pcb = tabla_pcb;
+    return crms;
 
 }
+void cr_ls_processes()
+{
+    printf("Imprimiendo procesos en ejecucion \n");
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->estado)
+        {
+            printf("id: %u, nombre: %s, estado: %i\n",proceso->id,proceso->nombre, proceso->estado);
+        }
+        
+    }
+    
+}
+int cr_exists(unsigned int process_id, char* filename)
+{
+    
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if ((proceso->id == process_id) && (proceso->estado==1))
+        {
+            printf("entre por el id\n");
+            for (int j = 0; j < 10; j++)
+            {
+                if (strcmp(proceso->subentradas[j]->nombre, filename) == 0)
+                {
+                    printf("entre por el nombre\n");
+                    return 1;
+                }
+                
+            }
+            printf("no encontre el nombre\n");
+            return 0;
+            
+        }
+        
+        
+    }
+    printf("no encontre por el id\n");
+    return 0;
+    
+}
+void cr_ls_files(int process_id)
+{
+    printf("Imprimiendo archivos del proceso %i\n",process_id);
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->id == process_id)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                if (proceso->subentradas[j]->validez)
+                {
+                    printf("%s\n",proceso->subentradas[j]->nombre);
+                }
+            }
+            
+        }
+        
+    }
+}
+
 
 CrmsFile* cr_open(int process_id, char* file_name, char mode){
     CrmsFile* crmsfile;
@@ -171,7 +245,7 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
             if (crms->tabla_pcb[i]->id == process_id){
                 for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
                     if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                        if (crms->tabla_pcb[i]->subentradas[j]->name == file_name){ //agregar validez de subentrada.
+                        if (crms->tabla_pcb[i]->subentradas[j]->nombre == file_name){ //agregar validez de subentrada.
                             crmsfile = crms->tabla_pcb[i]->subentradas[j];
                             break;
                         }
@@ -211,109 +285,101 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     unsigned int first_vpn = 0;
     unsigned int first_offset = 0;
     unsigned int second_vpn = 32;//para ver hasta donde puedo escribir.
-    unsigned int second_offset = BUFFER_PAGINA-1; //8MB
+    unsigned int second_offset = BUFFER_PAGINA; //8MB
     unsigned int pfn = 0;
-    for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos |    |
-        if (crms->tabla_pcb[i]->id == file_desc->process_id){
-            int estado = 1;
-            while (estado){
-                estado = 0;
-                for (int j = 0; j < 10; j++){
-                    if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn){
-                            if (first_offset == crms->tabla_pcb[i]->subentradas[j]->offset){
-                                //sumar tamaño y cambiar first_vpn y first offset
-                                first_vpn = crms->tabla_pcb[i]->subentradas[j]->vpn;
-                                first_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
-                                first_offset += crms->tabla_pcb[i]->subentradas[j]->tamaño;
-                                while (first_offset > (BUFFER_PAGINA-1)){ //REVISAR CASOS BORDE 
-                                    first_vpn += 1;
-                                    first_offset -= BUFFER_PAGINA; //REVISAR CASOS BORDE le resto el tamaño de la pagina para dezplazar el offset
-                                }
-                                estado = 1;
-                            }
+    Pcb* process = file_desc->process; //reviso los id de todos los procesos |    |
+    int estado = 1;
+    while (estado){
+        estado = 0;
+        for (int j = 0; j < 10; j++){
+            if (process->subentradas[j]->validez){
+                if (first_vpn == process->subentradas[j]->vpn){
+                    if (first_offset == process->subentradas[j]->offset){
+                        //sumar tamano y cambiar first_vpn y first offset
+                        first_vpn = process->subentradas[j]->vpn;
+                        first_offset = process->subentradas[j]->offset;
+                        first_offset += process->subentradas[j]->tamano;
+                        while (first_offset > (BUFFER_PAGINA-1)){ //REVISAR CASOS BORDE 
+                            first_vpn += 1;
+                            first_offset -= BUFFER_PAGINA; //REVISAR CASOS BORDE le resto el tamano de la pagina para dezplazar el offset
                         }
+                        estado = 1;
                     }
                 }
             }
-            int second_vpn = 32;//para ver hasta donde puedo escribir.
-            int second_offset = BUFFER_PAGINA-1; //8MB
-            for (int j = 0; j < 10; j++){
-                if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                    if (first_vpn == second_vpn){
-                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn){
-                            if ((first_offset < crms->tabla_pcb[i]->subentradas[j]->offset) && (crms->tabla_pcb[i]->subentradas[j]->offset <= second_offset)){
-                                second_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
-                            }
-                        }
-                    }
-                    else{
-                        if (second_vpn == crms->tabla_pcb[i]->subentradas[j]-> vpn){//revisar el rango del vpn
-                            if (second_offset > crms->tabla_pcb[i]->subentradas[j]->offset){
-                                second_offset == crms->tabla_pcb[i]->subentradas[j]->offset;
-                            }
-                        }
-                        else if ((second_vpn > crms->tabla_pcb[i]->subentradas[j]->vpn) && (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn)){
-                            if (first_offset < crms->tabla_pcb[i]->subentradas[j]->offset){
-                                second_offset == crms->tabla_pcb[i]->subentradas[j]->offset;
-                            }
-                        }
-                        else if ((second_vpn > crms->tabla_pcb[i]->subentradas[j]->vpn) && (first_vpn < crms->tabla_pcb[i]->subentradas[j]->vpn)){
-                            second_vpn = crms->tabla_pcb[i]->subentradas[j]->vpn;
-                            second_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
-                        }
+        }
+    }
+    for (int j = 0; j < 10; j++){
+        if (process->subentradas[j]->validez){
+            if (first_vpn == second_vpn){
+                if (first_vpn == process->subentradas[j]->vpn){
+                    if ((first_offset < process->subentradas[j]->offset) && (process->subentradas[j]->offset <= second_offset)){
+                        second_offset = process->subentradas[j]->offset;
                     }
                 }
-            }
-            for (int j = 0; j < 10; j++){ // update subentrada
-                if (crms->tabla_pcb[i]->subentradas[j]->validez == 0){
-                    file_desc->vpn = first_vpn;
-                    file_desc->offset = first_offset;
-                    file_desc->validez = 1;
-                    crms->tabla_pcb[i]->subentradas[j] = file_desc;
-                    break;
-                }
-            }
-            int disp_frame = 0; //TRADUCIR A funcion
-            if (crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez){
-                pfn= crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn;
-                disp_frame = 1;
             }
             else{
-                for (int j = 0; j < 128; i++){
-                    if (crms->bitmap->arreglo[j] == 0){
-                        pfn = j;
-                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez = 1;
-                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn = pfn;
-                        disp_frame = 1;
-                        break;
+                if (second_vpn == process->subentradas[j]-> vpn){//revisar el rango del vpn
+                    if (second_offset > process->subentradas[j]->offset){
+                        second_offset = process->subentradas[j]->offset;
                     }
                 }
+                else if ((second_vpn > process->subentradas[j]->vpn) && (first_vpn == process->subentradas[j]->vpn)){
+                    if (first_offset < process->subentradas[j]->offset){
+                        second_offset = process->subentradas[j]->offset;
+                    }
+                }
+                else if ((second_vpn > process->subentradas[j]->vpn) && (first_vpn < process->subentradas[j]->vpn)){
+                    second_vpn = process->subentradas[j]->vpn;
+                    second_offset = process->subentradas[j]->offset;
+                }
             }
+        }
+    }
+    for (int j = 0; j < 10; j++){ // update subentrada
+        if (process->subentradas[j]->validez == 0){
+            file_desc->vpn = first_vpn;
+            file_desc->offset = first_offset;
+            file_desc->validez = 1;
+            process->subentradas[j] = file_desc;
             break;
+        }
+    }
+    int disp_frame = 0; //TRADUCIR A funcion
+    if (process->tablapag.paginas[first_vpn]->validez){
+        pfn= process->tablapag.paginas[first_vpn]->pfn;
+        disp_frame = 1;
+    }
+    else{
+        for (int j = 0; j < 128; j++){
+            if (crms->bitmap->arreglo[j] == 0){
+                pfn = j;
+                process->tablapag.paginas[first_vpn]->validez = 1;
+                process->tablapag.paginas[first_vpn]->pfn = pfn;
+                disp_frame = 1;
+                break;
+            }
         }
     }
 
     unsigned int dir_fisica = obtener_dir(pfn, first_offset); //espacio fisico
-    int espacio_libre = 0; //calcular tamaño del espacio libre.
+    int espacio_libre = 0; //calcular tamano del espacio libre.
     if (first_vpn == second_vpn){
         espacio_libre = second_offset - first_offset;
     }
     else{
-        espacio_libre += BUFFER_PAGINA - first_offset; //tamaño pagina - first offset
-        espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamaño de paginas entre incio y fin
+        espacio_libre += BUFFER_PAGINA - first_offset; //tamano pagina - first offset
+        espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamano de paginas entre incio y fin
         espacio_libre += second_offset; //second_offset
     }
-    if (espacio_libre < n_bytes){ //update tamaño inicial
+    if (espacio_libre < n_bytes){ //update tamano inicial
         file_desc->tamano = espacio_libre;
     }
     else{
         file_desc->tamano = n_bytes;
     }
     
-
-    char* file_name = crms->mem_file;
-    FILE* file_pointer = fopen(file_name, "rb+");
+    FILE* file_pointer = fopen(ruta, "rb+");
     
     int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
     fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
@@ -321,8 +387,8 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     int contador_char = 0;
     char* caracter;
     while (n_bytes && espacio_libre && disp_frame){ //Escritura
-        //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamaño de bytes a escribir, nmemb numero de elementos, stream es el file
-        caracter = *buffer[contador_char];
+        //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamano de bytes a escribir, nmemb numero de elementos, stream es el file
+        caracter = &buffer[contador_char];
         fwrite(caracter, 1, 1, file_pointer);
         fseek(file_pointer, 1, SEEK_SET); 
         //REVISAR CAMBIO DE FRAME
@@ -333,16 +399,16 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
             first_offset = 0;
             first_vpn ++;
             disp_frame = 0; //TRADUCIR A funcion
-            if (crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez){
-                pfn= crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn;
+            if (process->tablapag.paginas[first_vpn]->validez){
+                pfn= process->tablapag.paginas[first_vpn]->pfn;
                 disp_frame = 1;
             }
             else{
-                for (int j = 0; j < 128; i++){
+                for (int j = 0; j < 128; j++){
                     if (crms->bitmap->arreglo[j] == 0){
                         pfn = j;
-                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez = 1;
-                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn = pfn;
+                        process->tablapag.paginas[first_vpn]->validez = 1;
+                        process->tablapag.paginas[first_vpn]->pfn = pfn;
                         disp_frame = 1;
                         break;
                     }
@@ -360,7 +426,7 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
         n_bytes --;
         espacio_libre --;
     }
-    fclose(file_name);
+    fclose(file_pointer);
     if (disp_frame == 0){
         file_desc->tamano = 0;
         return 0;
