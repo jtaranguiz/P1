@@ -25,13 +25,13 @@ typedef struct crms_file
   unsigned int offset;
   struct pcb* process;
 
-} CrmsFile ; //process_id o puntero al proceso.
+} CrmsFile ; 
 
 //entrada!
 typedef struct pcb
 {
   char estado;
-  int id;
+  unsigned int id;
   char* nombre;
   CrmsFile** subentradas;
   Tablapag tablapag;  
@@ -42,12 +42,15 @@ typedef struct bitmap
  int* arreglo; 
 } Bitmap ;
 
-
-
 typedef struct crms
 {
   Pcb** tabla_pcb;
   Bitmap* bitmap;
 } Crms ; //guardar direccion del .bin para no pasarla como argumento a las funciones
 void cr_mount (char* filename);
+Crms* asignar(char* filename);
+void cr_ls_processes();
+int cr_exists(unsigned int process_id, char* filename);
+void cr_ls_files(int process_id);
 CrmsFile* cr_open(int process_id, char* file_name, char mode);
+
