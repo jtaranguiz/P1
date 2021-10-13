@@ -239,14 +239,18 @@ void cr_ls_files(int process_id)
 CrmsFile* cr_open(int process_id, char* file_name, char mode){
     CrmsFile* crmsfile;
     if (mode == 'r'){
-        //do stuff
-        //crmsfile.process_id = process_id;
         for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
-            if (crms->tabla_pcb[i]->id == process_id){
+            if ((crms->tabla_pcb[i]->id == process_id) && crms->tabla_pcb[i]->estado){
+                //printf("id_process, name: %u, %s\n", crms->tabla_pcb[i]->id, crms->tabla_pcb[i]->nombre);
                 for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
                     if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                        if (crms->tabla_pcb[i]->subentradas[j]->nombre == file_name){ //agregar validez de subentrada.
+                        //printf("archivo, nombre, iguales: %i, %s\n", crms->tabla_pcb[i]->subentradas[j]->validez, crms->tabla_pcb[i]->subentradas[j]->nombre);
+                        if (strcmp(crms->tabla_pcb[i]->subentradas[j]->nombre, file_name) == 0){ 
                             crmsfile = crms->tabla_pcb[i]->subentradas[j];
+                            //printf("nombre_archivo_open: %s\n", crmsfile->nombre);
+                            //printf("nombre processo: %s\n", crmsfile->process->nombre);
+                            //printf("validez: %i\n", crmsfile->validez);
+                            //printf("tamano: %i\n", crmsfile->tamano);
                             break;
                         }
                     }
@@ -256,18 +260,22 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
         }
     }
     if (mode == 'w'){
-        //do other stuff
         if(cr_exists(process_id, file_name)) 
         {
+            //printf("ya existe \n");
             crmsfile = NULL;
         }
         else{
             crmsfile = calloc(1, sizeof(CrmsFile));
             crmsfile->nombre = calloc(12,sizeof(char));
             crmsfile->nombre = file_name;
-            //crmsfile->process_id = process_id;
             crmsfile->tamano = 0;
-            //to do: poner en una subentrada o ponerlo al escribir
+            for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
+                if ((crms->tabla_pcb[i]->id == process_id) && crms->tabla_pcb[i]->estado){
+                    crmsfile->process = crms->tabla_pcb[i];
+                    //printf("id_process, name: %u, %s\n", crms->tabla_pcb[i]->id, crms->tabla_pcb[i]->nombre);
+                }
+            }
         }
     }
     return crmsfile;
@@ -280,14 +288,8 @@ unsigned int obtener_dir(unsigned int vpn, unsigned int offset){
     return dir;
 }
 
-int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
-    //encontrar el primer lugar vacio.
-    unsigned int first_vpn = 0;
-    unsigned int first_offset = 0;
-    unsigned int second_vpn = 32;//para ver hasta donde puedo escribir.
-    unsigned int second_offset = BUFFER_PAGINA; //8MB
-    unsigned int pfn = 0;
-    Pcb* process = file_desc->process; //reviso los id de todos los procesos |    |
+unsigned int* find_first_empty(Pcb* process,unsigned int first_vpn,unsigned int first_offset){
+    unsigned int* dir_pointer = calloc(2, sizeof(unsigned int));
     int estado = 1;
     while (estado){
         estado = 0;
@@ -309,6 +311,13 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
             }
         }
     }
+    dir_pointer[0] = first_vpn;
+    dir_pointer[1] = first_offset;
+    return dir_pointer;
+}
+
+unsigned int* find_final_empty(Pcb* process,unsigned int first_vpn,unsigned int first_offset, unsigned int second_vpn, unsigned int second_offset){
+    unsigned int* dir_pointer = calloc(2, sizeof(unsigned int));
     for (int j = 0; j < 10; j++){
         if (process->subentradas[j]->validez){
             if (first_vpn == second_vpn){
@@ -336,6 +345,40 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
             }
         }
     }
+    dir_pointer[0] = second_vpn;
+    dir_pointer[1] = second_offset;
+    return dir_pointer;
+}
+
+int find_tamano_libre(unsigned int first_vpn, unsigned int first_offset, unsigned int second_vpn, unsigned int second_offset){
+    int espacio_libre = 0;
+    if (first_vpn == second_vpn){
+        espacio_libre = second_offset - first_offset;
+    }
+    else{
+        espacio_libre += BUFFER_PAGINA - first_offset; //tamano pagina - first offset
+        espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamano de paginas entre incio y fin
+        espacio_libre += second_offset; //second_offset
+    }
+    return espacio_libre;
+}
+
+int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
+    //encontrar el primer lugar vacio.
+    unsigned int first_vpn = 0;
+    unsigned int first_offset = 0;
+    unsigned int second_vpn = 32;//para ver hasta donde puedo escribir.
+    unsigned int second_offset = BUFFER_PAGINA; //8MB
+    unsigned int pfn = 0;
+    Pcb* process = file_desc->process; //reviso los id de todos los procesos 
+    unsigned int* dir_pointer = find_first_empty(process, first_vpn, first_offset); //Funcion que retorna el puntero a dos valores con el inicio
+    first_vpn = dir_pointer[0];
+    first_offset = dir_pointer[1];
+    free(dir_pointer);
+    dir_pointer = find_final_empty(process, first_vpn, first_offset, second_vpn, second_offset); //Funcion que retorna el final 
+    second_vpn = dir_pointer[0];
+    second_offset = dir_pointer[1];
+    free(dir_pointer);
     for (int j = 0; j < 10; j++){ // update subentrada
         if (process->subentradas[j]->validez == 0){
             file_desc->vpn = first_vpn;
@@ -364,21 +407,7 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
 
     unsigned int dir_fisica = obtener_dir(pfn, first_offset); //espacio fisico
     int espacio_libre = 0; //calcular tamano del espacio libre.
-    if (first_vpn == second_vpn){
-        espacio_libre = second_offset - first_offset;
-    }
-    else{
-        espacio_libre += BUFFER_PAGINA - first_offset; //tamano pagina - first offset
-        espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamano de paginas entre incio y fin
-        espacio_libre += second_offset; //second_offset
-    }
-    if (espacio_libre < n_bytes){ //update tamano inicial
-        file_desc->tamano = espacio_libre;
-    }
-    else{
-        file_desc->tamano = n_bytes;
-    }
-    
+    espacio_libre = find_tamano_libre(first_vpn, first_offset, second_vpn, second_offset);
     FILE* file_pointer = fopen(ruta, "rb+");
     
     int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
