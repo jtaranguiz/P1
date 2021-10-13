@@ -70,7 +70,7 @@ void cr_mount (char* filename)
             
             
                   
-            subentrada->vpn_offset = calloc(4,sizeof(char));
+            subentrada->vpn_offset = calloc(4,sizeof(char)); //ESTO NO SE USA
             //luego separar el vpn y offset
             //int contador_direccion = 3;
             unsigned int direccion = 0;
@@ -171,8 +171,10 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
                 for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
                     if (crms->tabla_pcb[i]->subentradas[j]->name == file_name){
                         crmsfile = crms->tabla_pcb[i]->subentradas[j];
+                        break;
                     }
                 }
+                break;
             }
         }
     }
@@ -194,3 +196,64 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
     return crmsfile;
 }
 
+int cr_write_file(CrmsFile* file_desc, void* buffer, int n_bytes){
+    //encontrar el primer lugar vacio.
+    for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
+        if (crms->tabla_pcb[i]->id == file_desc->process_id){
+            int first_vpn = 0;
+            int first_offset = 0;
+            int estado = 1;
+            while (estado){
+                estado = 0;
+                for (int j = 0; j < 10; j++){
+                    if (crms->tabla_pcb[i]->subentradas[j]->validez){
+                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]-vpn){
+                            if (first_offset == crms->tabla_pcb[i]->subentradas[j]->offset){
+                                //sumar tamaño y cambiar first_vpn y first offset
+                                first_vpn = crms->tabla_pcb[i]->subentradas[j]->vpn;
+                                first_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
+                                first_offset += crms->tabla_pcb[i]->subentradas[j]->tamaño;
+                                while (first_offset> 2^20*2^3-1){ //REVISAR CASOS BORDE
+                                    first_vpn += 1;
+                                    first_offset -= 2^20*2^3-1; //REVISAR CASOS BORDE
+                                }
+                                estado = 1;
+                            }
+                        }
+                    }
+                }
+            }
+            int second_vpn = 16;//para ver hasta donde puedo escribir.
+            int second_offset = 2^20*2^3-1; //8MB
+            for (int j = 0; j < 10; j++){
+                if (crms->tabla_pcb[i]->subentradas[j]->validez){
+                    if (first_vpn == second_vpn){
+                        if (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn){
+                            if ((first_offset <= crms->tabla_pcb[i]->subentradas[j]->offset) && (crms->tabla_pcb[i]->subentradas[j]->offset <= second_offset)){
+                                second_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
+                            }
+                        }
+                    }
+                    else{
+                        if (second_vpn == crms->tabla_pcb[i]->subentradas[j]-> vpn){//revisar el rango del vpn
+                            if (second_offset > crms->tabla_pcb[i]->subentradas[j]->offset){
+                                second_offset == crms->tabla_pcb[i]->subentradas[j]->offset;
+                            }
+                        }
+                        else if ((second_vpn > crms->tabla_pcb[i]->subentradas[j]->vpn) && (first_vpn == crms->tabla_pcb[i]->subentradas[j]->vpn)){
+                            if (first_offset < crms->tabla_pcb[i]->subentradas[j]->offset){
+                                second_offset == crms->tabla_pcb[i]->subentradas[j]->offset;
+                            }
+                        }
+                        else if ((second_vpn > crms->tabla_pcb[i]->subentradas[j]->vpn) && (first_vpn < crms->tabla_pcb[i]->subentradas[j]->vpn)){
+                            second_vpn = crms->tabla_pcb[i]->subentradas[j]->vpn;
+                            second_offset = crms->tabla_pcb[i]->subentradas[j]->offset;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+    //Por hacer: Escritura.
+}
