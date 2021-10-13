@@ -136,7 +136,6 @@ Crms* asignar (char* filename)
     {
 
         unsigned int byte = (unsigned int)((unsigned char)buffer_bitmap[i]);
-        printf("byte: %u\n", byte);
         int primero = (byte & 1);
         bitmap->arreglo[contador_bitmap] = primero;
         contador_bitmap += 1;
@@ -161,7 +160,7 @@ Crms* asignar (char* filename)
         int octavo = (byte & 128) >> 7;
         bitmap->arreglo[contador_bitmap] = octavo;
         contador_bitmap += 1;
-        printf("Bin: %i %i %i %i     %i %i %i %i \n", primero, segundo, tercero , cuarto, quinto, sexto, septimo, octavo);
+        //printf("Bin: %i %i %i %i     %i %i %i %i \n", primero, segundo, tercero , cuarto, quinto, sexto, septimo, octavo);
 
         
     }
@@ -179,7 +178,7 @@ void cr_ls_processes()
         Pcb* proceso = crms->tabla_pcb[i];
         if (proceso->estado)
         {
-            printf("id: %u, nombre: %s, estado: %i\n",proceso->id,proceso->nombre, proceso->estado);
+            printf("id: %u, nombre: %s\n",proceso->id,proceso->nombre);
         }
         
     }
@@ -217,21 +216,63 @@ int cr_exists(unsigned int process_id, char* filename)
 void cr_ls_files(int process_id)
 {
     printf("Imprimiendo archivos del proceso %i\n",process_id);
+    char* prueba = calloc(12,sizeof(char));
     for (int i = 0; i < 16; i++)
     {
+        //printf("||||||||||||||||||||||||||\n");
         Pcb* proceso = crms->tabla_pcb[i];
-        if (proceso->id == process_id)
+        if (proceso->id == process_id )
         {
             for (int j = 0; j < 10; j++)
             {
+                //printf("NOMBRE:%s,VALIDEZ:%i\n",proceso->subentradas[j]->nombre,proceso->subentradas[j]->validez);
                 if (proceso->subentradas[j]->validez)
                 {
-                    printf("%s\n",proceso->subentradas[j]->nombre);
+                    if (proceso->subentradas[j]->nombre)
+                    {
+                        printf("%s\n",proceso->subentradas[j]->nombre);
+                    }
                 }
             }
             
         }
         
+    }    
+}
+
+void cr_start_process(int process_id, char* process_name)
+{
+    int parada = NULL;
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->estado==0)
+        {
+            parada = i;
+            break;
+        }   
+    }
+    if (parada)
+    {
+        crms->tabla_pcb[parada]->id = process_id;
+        crms->tabla_pcb[parada]->nombre = process_name; 
+        crms->tabla_pcb[parada]->estado = 1;
     }
 }
 
+void cr_finish_process(int process_id)
+{
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->id == process_id)
+        {
+           for (int j = 0; j < 10; j++)
+           {
+               proceso->subentradas[j]->validez = 0;
+           }
+           proceso->estado = 0;
+        }
+        
+    }
+}
