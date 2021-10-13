@@ -88,7 +88,7 @@ void cr_mount (char* filename)
             unsigned int numero = 496; 
             unsigned int numero_offset = 4294966784;
 
-            unsigned int vpn = (direccion & numero) >> 4;
+            unsigned int vpn = (direccion & numero) >> 4;   //vpn  offset-> vpn 000000
             unsigned int offset = (direccion & numero_offset) >> 9;
             
             subentrada->offset = offset;
@@ -199,12 +199,20 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
     return crmsfile;
 }
 
+unsigned int obtener_dir(unsigned int vpn, unsigned int offset){
+    vpn = vpn << 4;
+    offset = offset << 9;
+    unsigned int dir = vpn | offset;
+    return dir;
+}
+
 int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     //encontrar el primer lugar vacio.
-    int first_vpn = 0;
-    int first_offset = 0;
-    int second_vpn = 32;//para ver hasta donde puedo escribir.
-    int second_offset = BUFFER_PAGINA-1; //8MB
+    unsigned int first_vpn = 0;
+    unsigned int first_offset = 0;
+    unsigned int second_vpn = 32;//para ver hasta donde puedo escribir.
+    unsigned int second_offset = BUFFER_PAGINA-1; //8MB
+    unsigned int pfn = 0;
     for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos |    |
         if (crms->tabla_pcb[i]->id == file_desc->process_id){
             int estado = 1;
@@ -257,11 +265,36 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
                     }
                 }
             }
+            for (int j = 0; j < 10; j++){ // update subentrada
+                if (crms->tabla_pcb[i]->subentradas[j]->validez == 0){
+                    file_desc->vpn = first_vpn;
+                    file_desc->offset = first_offset;
+                    file_desc->validez = 1;
+                    crms->tabla_pcb[i]->subentradas[j] = file_desc;
+                    break;
+                }
+            }
+            int disp_frame = 0; //TRADUCIR A funcion
+            if (crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez){
+                pfn= crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn;
+                disp_frame = 1;
+            }
+            else{
+                for (int j = 0; j < 128; i++){
+                    if (crms->bitmap->arreglo[j] == 0){
+                        pfn = j;
+                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez = 1;
+                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn = pfn;
+                        disp_frame = 1;
+                        break;
+                    }
+                }
+            }
             break;
         }
     }
-    //Por hacer: Escritura. Y poner en la tabla de archivos PD: NUNCA SE ESCRIBE EN second.
-    
+
+    unsigned int dir_fisica = obtener_dir(pfn, first_offset); //espacio fisico
     int espacio_libre = 0; //calcular tamaño del espacio libre.
     if (first_vpn == second_vpn){
         espacio_libre = second_offset - first_offset;
@@ -271,20 +304,70 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
         espacio_libre += (second_vpn - first_vpn - 1)*BUFFER_PAGINA; //tamaño de paginas entre incio y fin
         espacio_libre += second_offset; //second_offset
     }
-    //Por hacer: buscar espacio de memoria fisica.
-    int espacio_libre;
-    char* file_name = crms->mem_file;
-    FILE* file_pointer = fopen(filename, "rb+");
+    if (espacio_libre < n_bytes){ //update tamaño inicial
+        file_desc->tamano = espacio_libre;
+    }
+    else{
+        file_desc->tamano = n_bytes;
+    }
     
-    int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA; //sumar direccion de memoria fisica
+
+    char* file_name = crms->mem_file;
+    FILE* file_pointer = fopen(file_name, "rb+");
+    
+    int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
     fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
     int counter = 0;
-    while (n_bytes && espacio_libre){
+    int contador_char = 0;
+    char* caracter;
+    while (n_bytes && espacio_libre && disp_frame){ //Escritura
         //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamaño de bytes a escribir, nmemb numero de elementos, stream es el file
-        fwrite(buffer, 1, 1, file_pointer);
+        caracter = *buffer[contador_char];
+        fwrite(caracter, 1, 1, file_pointer);
         fseek(file_pointer, 1, SEEK_SET); 
         //REVISAR CAMBIO DE FRAME
+        first_offset ++;
+        counter ++;
+        contador_char ++;
+        if (first_offset > (BUFFER_PAGINA -1)){
+            first_offset = 0;
+            first_vpn ++;
+            disp_frame = 0; //TRADUCIR A funcion
+            if (crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez){
+                pfn= crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn;
+                disp_frame = 1;
+            }
+            else{
+                for (int j = 0; j < 128; i++){
+                    if (crms->bitmap->arreglo[j] == 0){
+                        pfn = j;
+                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->validez = 1;
+                        crms->tabla_pcb[i]->tablepag.pagina[first_vpn]->pfn = pfn;
+                        disp_frame = 1;
+                        break;
+                    }
+                }
+            }
+            dir_fisica = obtener_dir(pfn, first_offset);
+            if (disp_frame){
+                desplazamiento_pointer = -desplazamiento_pointer - counter;
+                fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
+                desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica;
+                fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
+            }
+            counter = 0;
+        }
         n_bytes --;
         espacio_libre --;
     }
+    fclose(file_name);
+    if (disp_frame == 0){
+        file_desc->tamano = 0;
+        return 0;
+    }
+    else{
+        file_desc->tamano = contador_char;
+        return contador_char;
+    }
 }
+

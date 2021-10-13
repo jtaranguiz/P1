@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "stdlib.h": "c",
-        "crms_api.h": "c"
+        "crms_api.h": "c",
+        "stdio.h": "c"
     }
 }
