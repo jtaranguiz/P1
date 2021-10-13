@@ -3,12 +3,21 @@
 #include <stdlib.h>
 #include <byteswap.h>
 #include "crms_API.h"
-void cr_mount (char* filename)
+#include <ctype.h>
+extern char* ruta;
+extern Crms* crms;
+void cr_mount(char* filename)
+{
+    ruta = filename;
+    printf("%s\n",ruta);
+}
+Crms* asignar (char* filename)
 {
     FILE* file_pointer = fopen(filename, "rb");
     char* buffer_tabla = calloc(BUFFER_TABLA, sizeof(char));
     char* buffer_bitmap = calloc(BUFFER_BITMAP,sizeof(char));
     char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char));
+    printf("en asignar: %s", filename);
     //liberar memoria
     int contador_pcbs = 0;
     Crms* crms = malloc(sizeof(Crms));
@@ -21,21 +30,22 @@ void cr_mount (char* filename)
         int contador_nombre = 0;
         Pcb* pecebe = malloc(sizeof(Pcb));
         pecebe->estado = buffer_tabla[i];
-        pecebe->id = buffer_tabla[i+1];
+        pecebe->id = (unsigned int)((unsigned char)buffer_tabla[i+1]);
         pecebe->nombre = calloc(12,sizeof(char));
         for (int j = i+2; j < i+14; j++)
         {
             pecebe->nombre[contador_nombre] = buffer_tabla[j];
             contador_nombre += 1;
         }
-        printf("%s \n",pecebe->nombre);        
-        CrmsFile** subentradas = calloc(10,sizeof(CrmsFile*));
+        printf("%s \n",pecebe->nombre); 
+        pecebe->subentradas = calloc(10,sizeof(CrmsFile*));    
+        //CrmsFile** subentradas = calloc(10,sizeof(CrmsFile*));
         
         for (int j = 0; j < 10; j++)
         {
             int contador_nombre_subentrada = 0;
             CrmsFile* subentrada = malloc(sizeof(CrmsFile));
-            subentrada->validez = buffer_tabla[i+14];
+            subentrada->validez = buffer_tabla[i+14 + (21*j)];
             //printf("validez %i\n", subentrada->validez);
             subentrada->nombre = calloc(12,sizeof(char));
             for (int k = (i+15) + (21*j); k < i+27 + (21*j); k++)
@@ -70,7 +80,7 @@ void cr_mount (char* filename)
             
             
                   
-            subentrada->vpn_offset = calloc(4,sizeof(char));
+            subentrada->vpn_offset = calloc(4,sizeof(char)); //ESTO NO SE USA
             //luego separar el vpn y offset
             //int contador_direccion = 3;
             unsigned int direccion = 0;
@@ -94,9 +104,9 @@ void cr_mount (char* filename)
             subentrada->offset = offset;
             subentrada->vpn = vpn;
 
-            subentradas[j] = subentrada;
+            pecebe->subentradas[j] = subentrada;
         }
-        pecebe->subentradas = subentradas;
+        //pecebe->subentradas = subentradas;
         int contador_pag = 0;
         unsigned int info;
         pecebe->tablapag.paginas = calloc(32, sizeof(Pagina*));
@@ -158,5 +168,70 @@ void cr_mount (char* filename)
     
     crms->bitmap = bitmap;
     crms->tabla_pcb = tabla_pcb;
+    return crms;
 
 }
+void cr_ls_processes()
+{
+    printf("Imprimiendo procesos en ejecucion \n");
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->estado)
+        {
+            printf("id: %u, nombre: %s, estado: %i\n",proceso->id,proceso->nombre, proceso->estado);
+        }
+        
+    }
+    
+}
+int cr_exists(unsigned int process_id, char* filename)
+{
+    
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if ((proceso->id == process_id) && (proceso->estado==1))
+        {
+            printf("entre por el id\n");
+            for (int j = 0; j < 10; j++)
+            {
+                if (strcmp(proceso->subentradas[j]->nombre, filename) == 0)
+                {
+                    printf("entre por el nombre\n");
+                    return 1;
+                }
+                
+            }
+            printf("no encontre el nombre\n");
+            return 0;
+            
+        }
+        
+        
+    }
+    printf("no encontre por el id\n");
+    return 0;
+    
+}
+void cr_ls_files(int process_id)
+{
+    printf("Imprimiendo archivos del proceso %i\n",process_id);
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->id == process_id)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                if (proceso->subentradas[j]->validez)
+                {
+                    printf("%s\n",proceso->subentradas[j]->nombre);
+                }
+            }
+            
+        }
+        
+    }
+}
+

@@ -28,7 +28,7 @@ typedef struct crms_file
 typedef struct pcb
 {
   char estado;
-  int id;
+  unsigned int id;
   char* nombre;
   CrmsFile** subentradas;
   Tablapag tablapag;  
@@ -47,3 +47,7 @@ typedef struct crms
   Bitmap* bitmap;
 } Crms ;
 void cr_mount (char* filename);
+Crms* asignar(char* filename);
+void cr_ls_processes();
+int cr_exists(unsigned int process_id, char* filename);
+void cr_ls_files(int process_id);
