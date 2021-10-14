@@ -3,7 +3,7 @@
 #define BUFFER_BITMAP 16
 #define BUFFER_FRAME 1073741824
 #define BUFFER_PAGINA 8388608
-
+                      
 typedef struct pagina
 {
   unsigned int pfn; //contiene PFN y validez ojo a futuro
@@ -20,7 +20,7 @@ typedef struct crms_file
   char validez;
   char* nombre;
   unsigned int tamano;
-  char* vpn_offset; //ya no se usa
+  unsigned int vpn_offset; //ya no se usa
   unsigned int vpn;
   unsigned int offset;
   struct pcb* process;
@@ -52,5 +52,10 @@ Crms* asignar(char* filename);
 void cr_ls_processes();
 int cr_exists(unsigned int process_id, char* filename);
 void cr_ls_files(int process_id);
+int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes);
 CrmsFile* cr_open(int process_id, char* file_name, char mode);
-
+int cr_read(CrmsFile* file_desc, char* buffer, int n_bytes);
+unsigned int obtener_dir(unsigned int vpn, unsigned int offset);
+void cr_close(CrmsFile* file_desc);
+void cr_delete_file(CrmsFile* file_desc);
+void liberar_frames(unsigned int vpn, Pcb* proceso);

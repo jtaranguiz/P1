@@ -80,7 +80,7 @@ Crms* asignar (char* filename)
             
             
                   
-            subentrada->vpn_offset = calloc(4,sizeof(char)); //ESTO NO SE USA
+            //ESTO NO SE USA
             //luego separar el vpn y offset
             //int contador_direccion = 3;
             unsigned int direccion = 0;
@@ -95,12 +95,12 @@ Crms* asignar (char* filename)
             
             direccion = dir_primero | dir_segundo | dir_tercero | dir_cuarto;
             
-            unsigned int numero = 496; 
-            unsigned int numero_offset = 4294966784;
+            unsigned int numero = 260046848; 
+            unsigned int numero_offset = 8388607;
 
-            unsigned int vpn = (direccion & numero) >> 4;
-            unsigned int offset = (direccion & numero_offset) >> 9;
-            
+            unsigned int vpn = (direccion & numero) >> 23;
+            unsigned int offset = (direccion & numero_offset);
+            subentrada->vpn_offset = direccion;
             subentrada->offset = offset;
             subentrada->vpn = vpn;
             subentrada ->process = pecebe;
@@ -282,8 +282,8 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
 }
 
 unsigned int obtener_dir(unsigned int vpn, unsigned int offset){
-    vpn = vpn << 4;
-    offset = offset << 9;
+    vpn = vpn << 23;
+    
     unsigned int dir = vpn | offset;
     return dir;
 }
@@ -412,14 +412,14 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     
     int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
     fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
-    int counter = 0;
+    int counter = 0; //revisar si se necesita
     int contador_char = 0;
     char* caracter;
+    printf("tamano: %u\n", espacio_libre);
     while (n_bytes && espacio_libre && disp_frame){ //Escritura
         //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamano de bytes a escribir, nmemb numero de elementos, stream es el file
         caracter = &buffer[contador_char];
-        fwrite(caracter, 1, 1, file_pointer);
-        fseek(file_pointer, 1, SEEK_SET); 
+        fwrite(caracter, 1, 1, file_pointer); 
         //REVISAR CAMBIO DE FRAME
         first_offset ++;
         counter ++;
@@ -445,8 +445,6 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
             }
             dir_fisica = obtener_dir(pfn, first_offset);
             if (disp_frame){
-                desplazamiento_pointer = -desplazamiento_pointer - counter;
-                fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
                 desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica;
                 fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
             }
@@ -466,3 +464,86 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     }
 }
 
+int cr_read(CrmsFile* file_desc, char* buffer, int n_bytes){
+    Pcb* process = file_desc->process;
+    unsigned int pfn = 0;
+    unsigned int tamano = file_desc->tamano;
+    unsigned int offset = file_desc->offset;
+    unsigned int vpn = file_desc->vpn;
+    if (process->tablapag.paginas[vpn]->validez){
+        printf("in validez\n");
+        pfn = process->tablapag.paginas[vpn]->pfn;
+    }
+    unsigned int dir_fisica = obtener_dir(pfn, offset);
+    FILE* file_pointer = fopen(ruta, "rb");
+    printf("vpn = %u\n", vpn);
+    int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
+    fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
+    int contador_char = 0;
+    char* caracter;
+    while(n_bytes && tamano){
+        caracter = &buffer[contador_char];
+        fread(caracter, sizeof(char), 1, file_pointer);
+        printf("%c", *caracter);
+        contador_char ++;
+        tamano --;
+        n_bytes --;
+        offset ++;
+        if (offset > (BUFFER_PAGINA -1)){
+            offset = 0;
+            vpn ++;
+            if (process->tablapag.paginas[vpn]->validez){
+                pfn = process->tablapag.paginas[vpn]->pfn;
+            }
+            dir_fisica = obtener_dir(pfn, offset);
+            desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica;
+            fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
+        }
+    }
+    printf("\n");
+    return contador_char;
+}
+
+void cr_close(CrmsFile* file_desc){
+    file_desc = NULL;
+}
+
+void cr_delete_file(CrmsFile* file_desc){
+    file_desc->validez = 0;
+    unsigned int vpn = file_desc->vpn;
+    unsigned int offset = file_desc->offset;
+    offset += file_desc->tamano;
+    liberar_frames(vpn, file_desc->process);
+    while (offset > (BUFFER_PAGINA-1)){ //REVISAR CASOS BORDE 
+        vpn += 1;
+        liberar_frames(vpn, file_desc->process);
+        offset -= BUFFER_PAGINA; //REVISAR CASOS BORDE le resto el tamano de la pagina para dezplazar el offset
+    }
+}
+
+void liberar_frames(unsigned int vpn, Pcb* proceso){
+    int filled = 0;
+    int vpn_aux = vpn;
+    for (int i = 0; i<10; i++){
+        if (proceso->subentradas[i]->validez){
+            int vpn_aux = proceso->subentradas[i]->vpn;
+            if (vpn_aux == vpn){
+                filled = 1;
+            }
+            unsigned int offset = proceso->subentradas[i]->offset;
+            offset += proceso->subentradas[i]->tamano;
+            while (offset > (BUFFER_PAGINA-1)){ //REVISAR CASOS BORDE 
+                vpn_aux += 1;
+                if (vpn_aux == vpn){
+                    filled = 1;
+                }
+                offset -= BUFFER_PAGINA; //REVISAR CASOS BORDE le resto el tamano de la pagina para dezplazar el offset
+            }
+        }
+    }
+    if (filled == 0){
+        proceso->tablapag.paginas[vpn]->validez = 0;
+        int pfn = proceso->tablapag.paginas[vpn]->pfn;
+        crms->bitmap->arreglo[pfn] = 0;
+    }
+}
