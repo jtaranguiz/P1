@@ -59,3 +59,4 @@ unsigned int obtener_dir(unsigned int vpn, unsigned int offset);
 void cr_close(CrmsFile* file_desc);
 void cr_delete_file(CrmsFile* file_desc);
 void liberar_frames(unsigned int vpn, Pcb* proceso);
+void close_memory();

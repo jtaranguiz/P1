@@ -9,20 +9,16 @@ extern Crms* crms;
 void cr_mount(char* filename)
 {
     ruta = filename;
-    printf("%s\n",ruta);
 }
 Crms* asignar (char* filename)
 {
     FILE* file_pointer = fopen(filename, "rb");
     char* buffer_tabla = calloc(BUFFER_TABLA, sizeof(char));
     char* buffer_bitmap = calloc(BUFFER_BITMAP,sizeof(char));
-    char* buffer_frame= calloc(BUFFER_FRAME,sizeof(char));
-    printf("en asignar: %s", filename);
     //liberar memoria
     int contador_pcbs = 0;
     Crms* crms = malloc(sizeof(Crms));
     fread(buffer_tabla,sizeof(char),BUFFER_TABLA,file_pointer);
-    printf("antes del for \n");
     Pcb** tabla_pcb = calloc (16, sizeof(Pcb*)); 
     
     for (int i = 0; i < BUFFER_TABLA; i+=256)
@@ -37,7 +33,6 @@ Crms* asignar (char* filename)
             pecebe->nombre[contador_nombre] = buffer_tabla[j];
             contador_nombre += 1;
         }
-        printf("%s \n",pecebe->nombre); 
         pecebe->subentradas = calloc(10,sizeof(CrmsFile*));    
         //CrmsFile** subentradas = calloc(10,sizeof(CrmsFile*));
         
@@ -46,21 +41,16 @@ Crms* asignar (char* filename)
             int contador_nombre_subentrada = 0;
             CrmsFile* subentrada = malloc(sizeof(CrmsFile));
             subentrada->validez = buffer_tabla[i+14 + (21*j)];
-            //printf("validez %i\n", subentrada->validez);
             subentrada->nombre = calloc(12,sizeof(char));
             for (int k = (i+15) + (21*j); k < i+27 + (21*j); k++)
             {
                 subentrada->nombre[contador_nombre_subentrada] = buffer_tabla[k];
                 contador_nombre_subentrada += 1;
             }
-            if (subentrada->nombre)
-            {
-                //printf("%s\n", subentrada->nombre);
-            }
             
             
             //falta comprobar que este en big endian preguntar sino
-            unsigned int * tamano = calloc(4,sizeof(char));
+            //unsigned int * tamano = calloc(4,sizeof(char));
             // primero ponemos como unsigned char al buffer, luego lo asginamos a un unsigned int
             // Swapeamos el valor del byte
             // shifts a la posicion correspondiente
@@ -117,7 +107,6 @@ Crms* asignar (char* filename)
             //info = info >> 24;
             unsigned int validez = info & 128 >> 7;
             unsigned int pfn = ((info & 127));
-            //printf("validez:%u pfn:%u \n",validez, pfn);
             pagina->pfn = pfn;
             pagina->validez = validez;
             pecebe->tablapag.paginas[contador_pag] = pagina;
@@ -136,7 +125,6 @@ Crms* asignar (char* filename)
     {
 
         unsigned int byte = (unsigned int)((unsigned char)buffer_bitmap[i]);
-        printf("byte: %u\n", byte);
         int primero = (byte & 1);
         bitmap->arreglo[contador_bitmap] = primero;
         contador_bitmap += 1;
@@ -161,13 +149,13 @@ Crms* asignar (char* filename)
         int octavo = (byte & 128) >> 7;
         bitmap->arreglo[contador_bitmap] = octavo;
         contador_bitmap += 1;
-        printf("Bin: %i %i %i %i     %i %i %i %i \n", primero, segundo, tercero , cuarto, quinto, sexto, septimo, octavo);
-
-        
+  
     }
-    
     crms->bitmap = bitmap;
     crms->tabla_pcb = tabla_pcb;
+    free(buffer_bitmap);
+    free(buffer_tabla);
+    fclose(file_pointer);
     return crms;
 
 }
@@ -193,24 +181,21 @@ int cr_exists(unsigned int process_id, char* filename)
         Pcb* proceso = crms->tabla_pcb[i];
         if ((proceso->id == process_id) && (proceso->estado==1))
         {
-            printf("entre por el id\n");
             for (int j = 0; j < 10; j++)
             {
                 if (strcmp(proceso->subentradas[j]->nombre, filename) == 0)
                 {
-                    printf("entre por el nombre\n");
                     return 1;
                 }
                 
             }
-            printf("no encontre el nombre\n");
+            
             return 0;
             
         }
         
         
     }
-    printf("no encontre por el id\n");
     return 0;
     
 }
@@ -225,8 +210,11 @@ void cr_ls_files(int process_id)
             for (int j = 0; j < 10; j++)
             {
                 if (proceso->subentradas[j]->validez)
-                {
-                    printf("%s\n",proceso->subentradas[j]->nombre);
+                {   
+                    for (int k = 0; k<12; k++){
+                        printf("%c",proceso->subentradas[j]->nombre[k]);
+                    }
+                    printf("\n");
                 }
             }
             
@@ -235,22 +223,15 @@ void cr_ls_files(int process_id)
     }
 }
 
-
 CrmsFile* cr_open(int process_id, char* file_name, char mode){
     CrmsFile* crmsfile;
     if (mode == 'r'){
         for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
             if ((crms->tabla_pcb[i]->id == process_id) && crms->tabla_pcb[i]->estado){
-                //printf("id_process, name: %u, %s\n", crms->tabla_pcb[i]->id, crms->tabla_pcb[i]->nombre);
                 for (int j = 0; j < 10; j++){ //reviso los nombres de los archivos del proceso
                     if (crms->tabla_pcb[i]->subentradas[j]->validez){
-                        //printf("archivo, nombre, iguales: %i, %s\n", crms->tabla_pcb[i]->subentradas[j]->validez, crms->tabla_pcb[i]->subentradas[j]->nombre);
                         if (strcmp(crms->tabla_pcb[i]->subentradas[j]->nombre, file_name) == 0){ 
                             crmsfile = crms->tabla_pcb[i]->subentradas[j];
-                            //printf("nombre_archivo_open: %s\n", crmsfile->nombre);
-                            //printf("nombre processo: %s\n", crmsfile->process->nombre);
-                            //printf("validez: %i\n", crmsfile->validez);
-                            //printf("tamano: %i\n", crmsfile->tamano);
                             break;
                         }
                     }
@@ -262,18 +243,16 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
     if (mode == 'w'){
         if(cr_exists(process_id, file_name)) 
         {
-            //printf("ya existe \n");
             crmsfile = NULL;
         }
         else{
-            crmsfile = calloc(1, sizeof(CrmsFile));
-            crmsfile->nombre = calloc(12,sizeof(char));
+            crmsfile = malloc(sizeof(CrmsFile));
+            crmsfile->nombre = calloc(12, sizeof(char));
             crmsfile->nombre = file_name;
             crmsfile->tamano = 0;
             for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
                 if ((crms->tabla_pcb[i]->id == process_id) && crms->tabla_pcb[i]->estado){
                     crmsfile->process = crms->tabla_pcb[i];
-                    //printf("id_process, name: %u, %s\n", crms->tabla_pcb[i]->id, crms->tabla_pcb[i]->nombre);
                 }
             }
         }
@@ -383,7 +362,9 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
         if (process->subentradas[j]->validez == 0){
             file_desc->vpn = first_vpn;
             file_desc->offset = first_offset;
-            file_desc->validez = 1;
+            unsigned int vpn_offset = obtener_dir(first_vpn, first_offset);
+            file_desc->vpn_offset = vpn_offset;
+            file_desc -> validez = 1;
             process->subentradas[j] = file_desc;
             break;
         }
@@ -415,7 +396,6 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     int counter = 0; //revisar si se necesita
     int contador_char = 0;
     char* caracter;
-    printf("tamano: %u\n", espacio_libre);
     while (n_bytes && espacio_libre && disp_frame){ //Escritura
         //fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream); //prt direccion de origen, size tamano de bytes a escribir, nmemb numero de elementos, stream es el file
         caracter = &buffer[contador_char];
@@ -471,12 +451,10 @@ int cr_read(CrmsFile* file_desc, char* buffer, int n_bytes){
     unsigned int offset = file_desc->offset;
     unsigned int vpn = file_desc->vpn;
     if (process->tablapag.paginas[vpn]->validez){
-        printf("in validez\n");
         pfn = process->tablapag.paginas[vpn]->pfn;
     }
     unsigned int dir_fisica = obtener_dir(pfn, offset);
     FILE* file_pointer = fopen(ruta, "rb");
-    printf("vpn = %u\n", vpn);
     int desplazamiento_pointer = BUFFER_BITMAP + BUFFER_TABLA + dir_fisica; //sumar direccion de memoria fisica
     fseek(file_pointer, desplazamiento_pointer, SEEK_SET); 
     int contador_char = 0;
@@ -484,7 +462,6 @@ int cr_read(CrmsFile* file_desc, char* buffer, int n_bytes){
     while(n_bytes && tamano){
         caracter = &buffer[contador_char];
         fread(caracter, sizeof(char), 1, file_pointer);
-        printf("%c", *caracter);
         contador_char ++;
         tamano --;
         n_bytes --;
@@ -500,7 +477,7 @@ int cr_read(CrmsFile* file_desc, char* buffer, int n_bytes){
             fseek(file_pointer, desplazamiento_pointer, SEEK_SET);
         }
     }
-    printf("\n");
+    fclose(file_pointer);
     return contador_char;
 }
 
@@ -546,4 +523,96 @@ void liberar_frames(unsigned int vpn, Pcb* proceso){
         int pfn = proceso->tablapag.paginas[vpn]->pfn;
         crms->bitmap->arreglo[pfn] = 0;
     }
+}
+
+void free_memory(){
+    free(crms->bitmap->arreglo);
+    free(crms->bitmap);
+    for (int i = 0; i < 16; i++){
+        Pcb* pecebe = crms->tabla_pcb[i];
+        for (int j = 0; j<10; j++){
+            CrmsFile* crms_file = pecebe->subentradas[j];
+            free(crms_file->nombre);
+            free(crms_file);
+        }
+        for (int j = 0; j<32; j++){
+            free(pecebe->tablapag.paginas[j]);
+        }
+        free(pecebe->tablapag.paginas);
+        free(pecebe->subentradas);
+        free(pecebe->nombre);
+        free(pecebe);
+    }
+    free(crms->tabla_pcb);
+    free(crms);
+}
+
+void close_memory(){
+    FILE* file_pointer = fopen(ruta, "rb+");
+
+    for (int i = 0; i < 16; i++){
+        Pcb* pecebe = crms->tabla_pcb[i];
+        char estado = pecebe->estado;
+        char* estado_pointer = &estado;
+        fwrite(estado_pointer, 1, 1, file_pointer);
+        unsigned char id = (unsigned char) pecebe->id;
+        unsigned char* id_pointer = &id;
+        fwrite(id_pointer, 1, 1, file_pointer);
+        fwrite(pecebe->nombre, sizeof(char), 12, file_pointer);
+        for (int j = 0; j<10; j++){
+            CrmsFile* crms_file = pecebe->subentradas[j];
+            char validez = crms_file->validez;
+            char* validez_pointer = &validez;
+            fwrite(validez_pointer, 1, 1, file_pointer);
+            fwrite(crms_file->nombre, sizeof(char), 12, file_pointer);
+            unsigned int tamano =  bswap_32(crms_file->tamano);
+            unsigned int* tamano_pointer = &tamano;
+            fwrite(tamano_pointer, sizeof(unsigned int), 1, file_pointer);
+            unsigned int vpn_offset =  bswap_32(crms_file->vpn_offset);
+            unsigned int* vpn_offset_pointer = &vpn_offset;
+            fwrite(vpn_offset_pointer, sizeof(unsigned int), 1, file_pointer);
+        }
+        for (int j = 0; j<32; j++){
+            Pagina* pagina = pecebe->tablapag.paginas[j];
+            unsigned int validez = pagina->validez << 7;
+            unsigned int pfn = pagina->pfn;
+            unsigned int entrada = validez | pfn;
+            char entrada_char = (unsigned char) entrada;
+            char* entrada_pointer = &entrada_char;
+            fwrite(entrada_pointer, sizeof(char), 1, file_pointer);
+        }
+    }
+    int contador_bitmap = 0;
+    for (int i = 0; i < BUFFER_BITMAP; i++)//escribir bitmap
+    {
+        
+        int primero = crms->bitmap->arreglo[contador_bitmap];
+        contador_bitmap += 1;
+        int segundo = crms->bitmap->arreglo[contador_bitmap];
+        segundo = segundo << 1;
+        contador_bitmap += 1;
+        int tercero = crms->bitmap->arreglo[contador_bitmap];
+        tercero = tercero << 2;
+        contador_bitmap += 1;
+        int cuarto = crms->bitmap->arreglo[contador_bitmap];
+        cuarto = cuarto << 3 ;
+        contador_bitmap += 1;
+        int quinto = crms->bitmap->arreglo[contador_bitmap];
+        quinto = quinto << 4;
+        contador_bitmap += 1;
+        int sexto = crms->bitmap->arreglo[contador_bitmap];
+        sexto = sexto << 5;
+        contador_bitmap += 1;
+        int septimo = crms->bitmap->arreglo[contador_bitmap];
+        septimo = septimo << 6;
+        contador_bitmap += 1;
+        int octavo = crms->bitmap->arreglo[contador_bitmap];
+        octavo = octavo << 7;
+        contador_bitmap += 1;
+        unsigned int byte = primero | segundo | tercero | cuarto | quinto | sexto | septimo | octavo;
+        unsigned int* byte_pointer = &byte;
+        fwrite(byte_pointer, sizeof(unsigned int), 1, file_pointer);
+    }
+    fclose(file_pointer);
+    free_memory();
 }
