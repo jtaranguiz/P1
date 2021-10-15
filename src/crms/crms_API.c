@@ -10,7 +10,8 @@ void cr_mount(char* filename)
 {
     ruta = filename;
 }
-Crms* asignar (char* filename)
+
+Crms* asignar(char* filename)
 {
     FILE* file_pointer = fopen(filename, "rb");
     char* buffer_tabla = calloc(BUFFER_TABLA, sizeof(char));
@@ -159,6 +160,7 @@ Crms* asignar (char* filename)
     return crms;
 
 }
+
 void cr_ls_processes()
 {
     printf("Imprimiendo procesos en ejecucion \n");
@@ -173,6 +175,7 @@ void cr_ls_processes()
     }
     
 }
+
 int cr_exists(unsigned int process_id, char* filename)
 {
     
@@ -183,7 +186,7 @@ int cr_exists(unsigned int process_id, char* filename)
         {
             for (int j = 0; j < 10; j++)
             {
-                if (strcmp(proceso->subentradas[j]->nombre, filename) == 0)
+                if ((strcmp(proceso->subentradas[j]->nombre, filename) == 0)&&(proceso->subentradas[j]->validez))
                 {
                     return 1;
                 }
@@ -199,6 +202,7 @@ int cr_exists(unsigned int process_id, char* filename)
     return 0;
     
 }
+
 void cr_ls_files(int process_id)
 {
     printf("Imprimiendo archivos del proceso %i\n",process_id);
@@ -218,6 +222,43 @@ void cr_ls_files(int process_id)
                 }
             }
             
+        }
+        
+    }
+}
+
+void cr_start_process(int process_id, char* process_name)
+{
+    int parada = -1;
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->estado==0)
+        {
+            parada = i;
+            break;
+        }   
+    }
+    if (parada != -1)
+    {
+        crms->tabla_pcb[parada]->id = process_id;
+        crms->tabla_pcb[parada]->nombre = process_name; 
+        crms->tabla_pcb[parada]->estado = 1;
+    }
+}
+
+void cr_finish_process(int process_id)
+{
+    for (int i = 0; i < 16; i++)
+    {
+        Pcb* proceso = crms->tabla_pcb[i];
+        if (proceso->id == process_id)
+        {
+           for (int j = 0; j < 10; j++)
+           {
+               proceso->subentradas[j]->validez = 0;
+           }
+           proceso->estado = 0;
         }
         
     }
@@ -248,7 +289,7 @@ CrmsFile* cr_open(int process_id, char* file_name, char mode){
         else{
             crmsfile = malloc(sizeof(CrmsFile));
             crmsfile->nombre = calloc(12, sizeof(char));
-            crmsfile->nombre = file_name;
+            strcpy(crmsfile->nombre, file_name);
             crmsfile->tamano = 0;
             for (int i = 0; i < 16; i++){ //reviso los id de todos los procesos
                 if ((crms->tabla_pcb[i]->id == process_id) && crms->tabla_pcb[i]->estado){
@@ -360,6 +401,8 @@ int cr_write_file(CrmsFile* file_desc, char* buffer, int n_bytes){
     free(dir_pointer);
     for (int j = 0; j < 10; j++){ // update subentrada
         if (process->subentradas[j]->validez == 0){
+            free(process->subentradas[j]->nombre);
+            free(process->subentradas[j]);
             file_desc->vpn = first_vpn;
             file_desc->offset = first_offset;
             unsigned int vpn_offset = obtener_dir(first_vpn, first_offset);

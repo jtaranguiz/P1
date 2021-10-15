@@ -7,30 +7,30 @@ Crms* crms;
 int main(int argc, char **argv)
 {
     char* filename = argv[1];
-    printf("%s",filename);
-    printf("FUNCIONA! \n");
     cr_mount(filename);
-    printf("main: %s\n",ruta);
     crms = asignar(ruta);   
     cr_ls_processes();
     int existe = cr_exists(0, "message.txt");
     printf("existe: %i\n",existe);
     //cr_ls_files(0);
-    CrmsFile* crmsfile = cr_open(0, "mytext.txt", 'w');
-    unsigned int dir = obtener_dir(crmsfile ->vpn, crmsfile->offset);
+    CrmsFile* crmsfile = cr_open(0, "message.txt", 'r');
+    //unsigned int dir = obtener_dir(crmsfile ->vpn, crmsfile->offset);
     
-    char* buffer2 = calloc(11, sizeof(char));
-    buffer2 = "holi q hace";
-    cr_write_file(crmsfile, buffer2, 11);
-    char* buffer = calloc(11, sizeof(char));
-    cr_read(crmsfile, buffer, 11);
-    printf("buffer = %s\n", buffer);
+    
+    char* buffer = calloc(16, sizeof(char));
+    cr_read(crmsfile, buffer, 16);
+    printf("buffer = ");
+    for (int i = 0; i<16; i++){
+        printf("%c", buffer[i]);
+    }
+    printf("\n");
     free(buffer);
-    free(buffer2);
-    printf("dir: %u   %u\n",crmsfile->vpn,  crmsfile->offset);
+    //free(buffer2);
+    //printf("dir: %u   %u\n",crmsfile->vpn,  crmsfile->offset);
+    cr_ls_files(0);
     //cr_delete_file(crmsfile);
     cr_close(crmsfile);
-    cr_ls_files(0);
+    
     close_memory();
     return 0;
 }
