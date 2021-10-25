@@ -55,7 +55,7 @@ Crms* asignar (char* filename)
             }
             if (subentrada->nombre)
             {
-                //printf("%s\n", subentrada->nombre);
+                printf("%s\n", subentrada->nombre);
             }
             
             
@@ -94,7 +94,7 @@ Crms* asignar (char* filename)
             dir_segundo = dir_segundo >> 8; 
             
             direccion = dir_primero | dir_segundo | dir_tercero | dir_cuarto;
-            
+            printf("DIRECCiON :%u \n",direccion);
             unsigned int numero = 496; 
             unsigned int numero_offset = 4294966784;
 
@@ -216,7 +216,6 @@ int cr_exists(unsigned int process_id, char* filename)
 void cr_ls_files(int process_id)
 {
     printf("Imprimiendo archivos del proceso %i\n",process_id);
-    char* prueba = calloc(12,sizeof(char));
     for (int i = 0; i < 16; i++)
     {
         //printf("||||||||||||||||||||||||||\n");
@@ -242,7 +241,7 @@ void cr_ls_files(int process_id)
 
 void cr_start_process(int process_id, char* process_name)
 {
-    int parada = NULL;
+    int parada = -1;
     for (int i = 0; i < 16; i++)
     {
         Pcb* proceso = crms->tabla_pcb[i];
@@ -252,7 +251,7 @@ void cr_start_process(int process_id, char* process_name)
             break;
         }   
     }
-    if (parada)
+    if (parada != -1)
     {
         crms->tabla_pcb[parada]->id = process_id;
         crms->tabla_pcb[parada]->nombre = process_name; 

@@ -12,11 +12,15 @@ int main(int argc, char **argv)
     cr_mount(filename);
     printf("main: %s\n",ruta);
     crms = asignar(ruta);   
-    cr_ls_processes();
-    int existe = cr_exists(0, "message.txt");
-    printf("existe: %i\n",existe);
-    cr_ls_files(0);
+    //cr_ls_processes();
+    //int existe = cr_exists(0, "message.txt");
+    // printf("existe: %i\n",existe);
+    // cr_ls_files(0);
     
+    // cr_start_process(1, "prueba");
+    // cr_ls_processes();
+    // cr_finish_process(1);
+    // cr_ls_processes();
     
     
     return 0;

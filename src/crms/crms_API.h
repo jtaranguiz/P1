@@ -51,3 +51,5 @@ Crms* asignar(char* filename);
 void cr_ls_processes();
 int cr_exists(unsigned int process_id, char* filename);
 void cr_ls_files(int process_id);
+void cr_start_process(int process_id, char* process_name);
+void cr_finish_process(int process_id);
