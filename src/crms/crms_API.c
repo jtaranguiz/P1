@@ -242,7 +242,7 @@ void cr_start_process(int process_id, char* process_name)
     if (parada != -1)
     {
         crms->tabla_pcb[parada]->id = process_id;
-        crms->tabla_pcb[parada]->nombre = process_name; 
+        strcpy(crms->tabla_pcb[parada]->nombre, process_name); 
         crms->tabla_pcb[parada]->estado = 1;
     }
 }
@@ -565,6 +565,7 @@ void liberar_frames(unsigned int vpn, Pcb* proceso){
         proceso->tablapag.paginas[vpn]->validez = 0;
         int pfn = proceso->tablapag.paginas[vpn]->pfn;
         crms->bitmap->arreglo[pfn] = 0;
+        printf("en 0, %i\n", pfn);
     }
 }
 

@@ -1,0 +1,65 @@
+#include <stdio.h>  // FILE, fopen, fclose, etc.
+#include <string.h> // strtok, strcpy, etc.
+#include <stdlib.h>
+#include "crms_API.h"
+char* ruta = NULL;
+Crms* crms;
+int main(int argc, char **argv)
+{
+    char* filename = argv[1];
+    cr_mount(filename);
+    crms = asignar(ruta);   
+
+    printf("\n");
+    cr_start_process(1,"primero"); //Iniciando el primer proceso
+    cr_ls_processes();
+    CrmsFile* crms_file = cr_open(1,"myfile.txt",'w');
+    
+    char* lista = calloc(8388600,sizeof(char));
+    for (int i = 0; i < 8388600; i++)
+    {
+        lista[i] = 'a';
+    }
+    int escrito = cr_write_file(crms_file,lista,8388600); //escribimos un archivo de casi 8 MB
+
+    printf("\n");
+    //printf("VPN: %u, OFFSET: %u \n", crms_file->vpn,crms_file->offset); 
+    cr_start_process(2,"segundo"); //Creamos un segundo proceso
+    CrmsFile* crms_file2 = cr_open(2,"myfile.txt",'w'); //Creamos un archivo que use el segundo frame en otro proceso
+    char* palabra = "Estoy en frame 1";
+    int escribido = cr_write_file(crms_file2,palabra,16);
+    printf("VPN 2: %u, OFFSET 2: %u \n", crms_file2->vpn,crms_file2->offset);
+    char* buffer = calloc(16,sizeof(char));
+    int leidos = cr_read(crms_file2, buffer,16);
+
+    for (int i = 0; i < 16; i++)
+    {
+        printf("%c",buffer[i]);
+    }
+    printf("\n");
+    CrmsFile* crms_file3 = cr_open(1,"myfile1.txt",'w'); //Creamos un archivo que use el segundo frame en otro proceso
+    char* palabra2 = "Texto de ejemplo";
+    int escribido2 = cr_write_file(crms_file3,palabra2,16);
+    printf("VPN 3: %u, OFFSET 3: %u \n", crms_file3->vpn,crms_file3->offset);
+    char* buffer2 = calloc(16,sizeof(char));
+    int leidos2 = cr_read(crms_file3, buffer2,16);
+
+    printf("\n");
+    for (int i = 0; i < 16; i++)
+    {
+        printf("%c",buffer2[i]);//imprimir archivo 2 proceso 1
+    }
+    printf("\n");
+    cr_delete_file(crms_file2);
+    cr_delete_file(crms_file);
+    cr_delete_file(crms_file3);
+    cr_close(crms_file);    
+    free(lista);
+    free(buffer);
+    free(buffer2);
+    cr_finish_process(1);
+    cr_finish_process(2);
+    close_memory();
+    return 0;
+}
+

@@ -1,0 +1,34 @@
+#include <stdio.h>  // FILE, fopen, fclose, etc.
+#include <string.h> // strtok, strcpy, etc.
+#include <stdlib.h>
+#include "crms_API.h"
+char* ruta = NULL;
+Crms* crms;
+int main(int argc, char **argv)
+{
+    char* filename = argv[1];
+    cr_mount(filename);
+    crms = asignar(ruta);  
+    cr_ls_processes();//procesos despues de crear uno nuevo
+    char* nombre = calloc(12, sizeof(char));
+    strcpy(nombre, "file2.txt");
+    int exist = cr_exists(69, nombre);
+    printf("existe_antes: %i\n", exist);
+    CrmsFile* crms_file = cr_open(69, nombre, 'r');
+    
+    char* buffer2 = calloc(16, sizeof(char));
+    printf("buffer: ");
+    int escrito = cr_read(crms_file, buffer2, 8);
+    for (int i = 0; i<escrito; i++){
+    printf("%c", buffer2[i]);
+    }
+    free(nombre);
+    printf("\n");
+    free(buffer2);
+    cr_ls_files(69);
+    cr_finish_process(69);
+    printf("Borramos el proceso...\n");
+    cr_ls_processes();
+    printf("guardamos en memoria...\n");    
+    close_memory();
+}
